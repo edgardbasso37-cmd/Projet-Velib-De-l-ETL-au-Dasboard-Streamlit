@@ -1,0 +1,61 @@
+services:
+
+  postgres:
+    image: postgres:18.1
+    #container_name: velib_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  ingestion:
+    build:
+      context: ./ingestion
+      dockerfile: Dockerfile
+    #container_name: velib_ingestion
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      VELIB_API_BASE_URL: ${VELIB_API_BASE_URL}
+      VELIB_API_PAGE_SIZE: ${VELIB_API_PAGE_SIZE}
+      METEO_API_URL: ${METEO_API_URL}
+      FETCH_INTERVAL_MINUTES: ${FETCH_INTERVAL_MINUTES}
+
+  dbt:
+    build:
+      context: ./dbt
+      dockerfile: Dockerfile
+    #container_name: velib_dbt
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    restart: "no"
+  
+
+volumes:
+  postgres_data:
+   

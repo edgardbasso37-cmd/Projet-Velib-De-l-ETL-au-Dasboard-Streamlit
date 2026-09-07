@@ -1,0 +1,90 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: "Données brutes telles que reçues des API (jamais modifiées)"
+    tables:
+      - name: velib_stations
+        description: >
+          Snapshots des stations Vélib' issus de l'API Paris Open Data (norme GBFS).
+          Chaque ligne représente l'état d'une station à un instant donné.
+          Fréquence de mise à jour : ~1 minute.
+        columns:
+          - name: stationcode
+            description: "Identifiant unique de la station (ex: '12007+' ou '16103')"
+            tests:
+              - not_null
+          - name: name
+            description: "Nom lisible de la station (ex: 'Benjamin Godard - Victor Hugo')"
+          - name: capacity
+            description: "Nombre total de bornettes de la station"
+            tests:
+              - not_null
+          - name: numdocksavailable
+            description: "Nombre de bornettes libres au moment du snapshot"
+          - name: numbikesavailable
+            description: "Nombre total de vélos disponibles (mécaniques + électriques)"
+          - name: mechanical
+            description: "Nombre de vélos mécaniques disponibles"
+          - name: ebike
+            description: "Nombre de vélos électriques disponibles"
+          - name: is_installed
+            description: "Statut d'installation de la station : 'OUI' ou 'NON'"
+            tests:
+              - accepted_values:
+                  arguments:
+                    values: ['OUI', 'NON']
+          - name: is_renting
+            description: "Indique si la station accepte des locations : 'OUI' ou 'NON'"
+            tests:
+              - accepted_values:
+                  arguments:
+                    values: ['OUI', 'NON']
+          - name: duedate
+            description: >
+              Horodatage de la dernière mise à jour GBFS de la station (norme GBFS).
+              Un duedate éloigné ne signifie pas une donnée manquante mais que l'état
+              de la station n'a pas changé depuis cette date.
+            tests:
+              - not_null
+          - name: lon
+            description: "Longitude WGS84 de la station"
+          - name: lat
+            description: "Latitude WGS84 de la station"
+          - name: nom_arrondissement_communes
+            description: "Nom de la commune ou de l'arrondissement parisien"
+          - name: code_insee_commune
+            description: "Code INSEE de la commune"
+
+      - name: meteo_paris
+        description: >
+          Mesures météorologiques Open-Meteo pour Paris (coordonnées fixes).
+          Fréquence : intervalles de 15 minutes.
+          Les colonnes reflètent exactement le payload JSON de l'API sans transformation.
+        columns:
+          - name: measured_at
+            description: "Horodatage UTC de la mesure météo"
+            tests:
+              - not_null
+              - unique
+          - name: temperature_2m
+            description: "Température de l'air à 2 mètres du sol (°C)"
+          - name: relative_humidity_2m
+            description: "Humidité relative à 2 mètres du sol (%)"
+          - name: apparent_temperature
+            description: "Température ressentie (°C), tenant compte du vent et de l'humidité"
+          - name: is_day
+            description: "1 si mesure prise de jour, 0 si nuit (SMALLINT)"
+          - name: precipitation
+            description: "Précipitations totales (pluie + bruine + neige) en mm"
+          - name: rain
+            description: "Pluie en mm"
+          - name: showers
+            description: "Averses en mm"
+          - name: snowfall
+            description: "Chutes de neige en cm"
+          - name: cloud_cover
+            description: "Couverture nuageuse totale (%)"
+          - name: wind_speed_10m
+            description: "Vitesse du vent à 10 mètres du sol (km/h)"
