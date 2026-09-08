@@ -22,4 +22,4 @@ COPY . .
 RUN uv sync --frozen --no-dev
 # On lance le fichier main.py
 
-CMD [ "uv","run","main.py" ]
+#CMD [ "uv","run","main.py" ] plus besoin c'est airflow qui le fera

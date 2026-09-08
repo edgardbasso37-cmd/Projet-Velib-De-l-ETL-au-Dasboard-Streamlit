@@ -37,8 +37,10 @@ services:
       VELIB_API_BASE_URL: ${VELIB_API_BASE_URL}
       VELIB_API_PAGE_SIZE: ${VELIB_API_PAGE_SIZE}
       METEO_API_URL: ${METEO_API_URL}
-      FETCH_INTERVAL_MINUTES: ${FETCH_INTERVAL_MINUTES}
-
+      #FETCH_INTERVAL_MINUTES: ${FETCH_INTERVAL_MINUTES}
+     
+    profiles:
+      - manual
   dbt:
     build:
       context: ./dbt
@@ -55,6 +57,98 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     restart: "no"
   
+# Airflow — init (job ponctuel : migration DB + création utilisateur admin)
+  airflow-init:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: velib_airflow_init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${AIRFLOW_DB_NAME} 
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      AIRFLOW_DB_NAME: ${AIRFLOW_DB_NAME}
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        python /opt/airflow/init_db.py
+        airflow db migrate
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_USER}" \
+          --password "${AIRFLOW_ADMIN_PASSWORD}" \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@velib.local
+    restart: "no"
+
+  # Airflow — webserver (UI sur le port 8080)
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: velib_airflow_webserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/airflow_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      VELIB_API_BASE_URL: ${VELIB_API_BASE_URL}
+      VELIB_API_PAGE_SIZE: ${VELIB_API_PAGE_SIZE}
+      METEO_API_URL: ${METEO_API_URL}
+    ports:
+      - "8080:8080"
+    command: webserver
+    restart: unless-stopped
+
+  # Airflow — scheduler (exécute les DAGs selon leur cron)
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: velib_airflow_scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/airflow_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      VELIB_API_BASE_URL: ${VELIB_API_BASE_URL}
+      VELIB_API_PAGE_SIZE: ${VELIB_API_PAGE_SIZE}
+      METEO_API_URL: ${METEO_API_URL}
+      DBT_PROFILES_DIR: /opt/dbt
+    command: scheduler
+    restart: unless-stopped
 
 volumes:
   postgres_data:
